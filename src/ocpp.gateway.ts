@@ -6,7 +6,6 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { WebSocket, Server } from 'ws';
-import fetch from 'node-fetch';
 
 @WebSocketGateway({ path: '/ocpp' })
 export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {

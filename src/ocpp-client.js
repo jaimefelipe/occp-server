@@ -2,7 +2,7 @@
 const WebSocket = require('ws');
 
 // Cambiá esta URL si estás usando Render o localhost
-const ws = new WebSocket('ws://localhost:3000/ocpp');
+const ws = new WebSocket('wss://ocpp-server-9e1v.onrender.com/ocpp');
 
 ws.on('open', () => {
   console.log('🟢 Conectado al servidor OCPP');

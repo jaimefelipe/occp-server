@@ -26,7 +26,7 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
           if (msgType === 2 && typeof action === 'string') {
             console.log(`⚡ Acción OCPP recibida: ${action}`, payload);
 
-            // === Enviar a backend PHP para registrar el evento ===
+            // === Enviar a backend Salvatec ===
             try {
               const res = await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
                 method: 'POST',
@@ -35,7 +35,7 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
                   action: action,
                   chargePoint: payload?.chargePoint || 'UNKNOWN',
                   timestamp: payload?.timestamp || new Date().toISOString(),
-                  Id_Empresa: 1, // 🔁 Cambiar según lógica empresarial
+                  Id_Empresa: 1,
                   payload: payload
                 }),
               });
@@ -46,7 +46,7 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
               console.error('❌ Error al llamar al endpoint PHP:', err.message);
             }
 
-            // === Enviar respuesta tipo 3 solo para BootNotification ===
+            // === Enviar respuesta SOLO si es BootNotification ===
             if (action === 'BootNotification') {
               const response = [
                 3,
@@ -60,13 +60,13 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
               client.send(JSON.stringify(response));
             }
           } else {
-            console.log('🔔 Mensaje recibido pero no es una llamada válida OCPP:', message);
+            console.log('🔔 Mensaje recibido no válido para Call (msgType !== 2):', message);
           }
         } else {
-          console.log('❌ Formato no soportado (no es array OCPP):', message);
+          console.log('❌ Formato incorrecto (esperado array OCPP):', message);
         }
       } catch (err) {
-        console.error('❗ Error al procesar mensaje:', err.message);
+        console.error('❗ Error procesando mensaje del cliente:', err.message);
       }
     });
   }

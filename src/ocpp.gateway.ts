@@ -6,6 +6,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { WebSocket, Server } from 'ws';
+import fetch from 'node-fetch';
 
 @WebSocketGateway({ path: '/ocpp' })
 export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -15,7 +16,7 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log('📡 Cliente conectado');
     client.send(JSON.stringify({ msg: 'Bienvenido desde Salvatec OCPP Server' }));
 
-    client.on('message', (data) => {
+    client.on('message', async (data) => {
       try {
         const message = JSON.parse(data.toString());
 
@@ -24,6 +25,29 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
           if (msgType === 2 && action === 'BootNotification') {
             console.log('⚡ BootNotification recibido:', payload);
+
+            /**Fetch */
+            try {
+              await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: action,
+                  chargePoint: payload.chargePoint,
+                  timestamp: payload.timestamp,
+                  Id_Empresa: 1, // Cambiar si querés detectar por cargador
+                  payload: payload // Opcional: enviar todo
+                }),
+              }).then(async res => {
+                const response = await res.json();
+                console.log('📬 Evento registrado en Salvatec:', response);
+              }).catch(err => {
+                console.error('❌ Error al llamar al endpoint PHP:', err.message);
+              });
+            } catch (err) {
+              console.error('❗ Error general al enviar evento al backend:', err.message);
+            }
+            /**Fin Fetch */
 
             // Aquí podés luego guardar el payload en tu base de datos vía API PHP
             const response = [

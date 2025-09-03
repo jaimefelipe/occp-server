@@ -4,11 +4,18 @@ const socket = new WebSocket('wss://occp-server-9e1v.onrender.com/ocpp');
 
 socket.on('open', () => {
   console.log('✅ Conectado al servidor');
-  socket.send(JSON.stringify({
-    action: 'BootNotification',
-    chargePoint: 'SALVATEC-001',
-    timestamp: new Date().toISOString()
-  }));
+
+  const message = [
+    2,                                // msgType: Call
+    '123456',                         // uniqueId
+    'BootNotification',              // action
+    {
+      chargePoint: 'SALVATEC-001',   // payload
+      timestamp: new Date().toISOString()
+    }
+  ];
+
+  socket.send(JSON.stringify(message));
 });
 
 socket.on('message', (data) => {

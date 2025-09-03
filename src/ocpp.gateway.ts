@@ -1,4 +1,3 @@
-// src/ocpp.gateway.ts
 import {
   WebSocketGateway,
   OnGatewayConnection,
@@ -13,6 +12,7 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: WebSocket) {
     console.log('📡 Cliente conectado');
+
     client.send(JSON.stringify({ msg: 'Bienvenido desde Salvatec OCPP Server' }));
 
     client.on('message', async (data) => {
@@ -23,54 +23,85 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
           const [msgType, uniqueId, action, payload] = message;
 
           if (msgType === 2 && typeof action === 'string') {
-            console.log(`⚡ Acción OCPP recibida: ${action}`, payload);
+            console.log(`⚡ ${action} recibido:`, payload);
 
-            // === Enviar a backend Salvatec ===
-            try {
-              const res = await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: action,
-                  chargePoint: payload?.chargePoint || 'UNKNOWN',
-                  timestamp: payload?.timestamp || new Date().toISOString(),
-                  Id_Empresa: 1,
-                  payload: payload
-                }),
-              });
+            // Registrar evento en PHP
+            await this.registrarEvento(action, payload);
 
-              const respuesta = await res.json();
-              console.log('📬 Evento registrado en Salvatec:', respuesta);
-            } catch (err) {
-              console.error('❌ Error al llamar al endpoint PHP:', err.message);
-            }
+            // Construir respuesta (tipo 3 = respuesta a petición tipo 2)
+            const response = [
+              3,
+              uniqueId,
+              this.generarRespuesta(action),
+            ];
 
-            // === Enviar respuesta SOLO si es BootNotification ===
-            if (action === 'BootNotification') {
-              const response = [
-                3,
-                uniqueId,
-                {
-                  currentTime: new Date().toISOString(),
-                  interval: 300,
-                  status: "Accepted"
-                }
-              ];
-              client.send(JSON.stringify(response));
-            }
+            client.send(JSON.stringify(response));
           } else {
-            console.log('🔔 Mensaje recibido no válido para Call (msgType !== 2):', message);
+            console.log('🔔 Otro mensaje OCPP recibido:', message);
           }
         } else {
-          console.log('❌ Formato incorrecto (esperado array OCPP):', message);
+          console.log('❌ Formato OCPP inválido (no es array):', message);
         }
       } catch (err) {
-        console.error('❗ Error procesando mensaje del cliente:', err.message);
+        console.error('❗ Error al procesar mensaje:', err.message);
       }
     });
   }
 
   handleDisconnect(client: WebSocket) {
     console.log('❌ Cliente desconectado');
+  }
+
+  private async registrarEvento(action: string, payload: any) {
+    try {
+      const body = {
+        action,
+        chargePoint: payload?.chargePoint || 'UNKNOWN',
+        timestamp: payload?.timestamp || new Date().toISOString(),
+        Id_Empresa: 1,
+        payload
+      };
+
+      const res = await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const result = await res.json();
+      console.log('📬 Evento registrado en Salvatec:', result);
+    } catch (err) {
+      console.error('❌ Error al enviar evento al backend PHP:', err.message);
+    }
+  }
+
+  private generarRespuesta(action: string) {
+    switch (action) {
+      case 'BootNotification':
+        return {
+          currentTime: new Date().toISOString(),
+          interval: 300,
+          status: 'Accepted'
+        };
+      case 'Heartbeat':
+        return {
+          currentTime: new Date().toISOString()
+        };
+      case 'Authorize':
+        return {
+          idTagInfo: {
+            status: 'Accepted'
+          }
+        };
+      case 'StartTransaction':
+        return {
+          transactionId: Math.floor(Math.random() * 10000),
+          idTagInfo: {
+            status: 'Accepted'
+          }
+        };
+      default:
+        return { status: 'Accepted' };
+    }
   }
 }

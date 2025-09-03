@@ -6,6 +6,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { WebSocket, Server } from 'ws';
+import fetch from 'node-fetch';
 
 @WebSocketGateway({ path: '/ocpp' })
 export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -22,55 +23,52 @@ export class OcppGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (Array.isArray(message)) {
           const [msgType, uniqueId, action, payload] = message;
 
-          if (msgType === 2 && action === 'BootNotification') {
-            console.log('⚡ BootNotification recibido:', payload);
+          if (msgType === 2 && typeof action === 'string') {
+            console.log(`⚡ Acción OCPP recibida: ${action}`, payload);
 
-            /**Fetch */
+            // === Enviar a backend PHP para registrar el evento ===
             try {
-              await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
+              const res = await fetch('https://toxo.work/core/php/ocpp/registrarEvento.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   action: action,
-                  chargePoint: payload.chargePoint,
-                  timestamp: payload.timestamp,
-                  Id_Empresa: 1, // Cambiar si querés detectar por cargador
-                  payload: payload // Opcional: enviar todo
+                  chargePoint: payload?.chargePoint || 'UNKNOWN',
+                  timestamp: payload?.timestamp || new Date().toISOString(),
+                  Id_Empresa: 1, // 🔁 Cambiar según lógica empresarial
+                  payload: payload
                 }),
-              }).then(async res => {
-                const response = await res.json();
-                console.log('📬 Evento registrado en Salvatec:', response);
-              }).catch(err => {
-                console.error('❌ Error al llamar al endpoint PHP:', err.message);
               });
+
+              const respuesta = await res.json();
+              console.log('📬 Evento registrado en Salvatec:', respuesta);
             } catch (err) {
-              console.error('❗ Error general al enviar evento al backend:', err.message);
+              console.error('❌ Error al llamar al endpoint PHP:', err.message);
             }
-            /**Fin Fetch */
 
-            // Aquí podés luego guardar el payload en tu base de datos vía API PHP
-            const response = [
-              3,
-              uniqueId,
-              {
-                currentTime: new Date().toISOString(),
-                interval: 300,
-                status: "Accepted"
-              }
-            ];
-
-            client.send(JSON.stringify(response));
+            // === Enviar respuesta tipo 3 solo para BootNotification ===
+            if (action === 'BootNotification') {
+              const response = [
+                3,
+                uniqueId,
+                {
+                  currentTime: new Date().toISOString(),
+                  interval: 300,
+                  status: "Accepted"
+                }
+              ];
+              client.send(JSON.stringify(response));
+            }
           } else {
-            console.log('🔔 Otro mensaje OCPP recibido:', message);
+            console.log('🔔 Mensaje recibido pero no es una llamada válida OCPP:', message);
           }
         } else {
-          console.log('❌ Formato no soportado:', message);
+          console.log('❌ Formato no soportado (no es array OCPP):', message);
         }
       } catch (err) {
         console.error('❗ Error al procesar mensaje:', err.message);
       }
     });
-
   }
 
   handleDisconnect(client: WebSocket) {
